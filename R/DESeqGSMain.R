@@ -1,10 +1,14 @@
 library(tidyverse)
 library(googledrive)
 library(googlesheets4)
+library(DESeq2)
+library(data.table)
+
 
 #drive_auth(email = TRUE)
 #sheets_auth(email = TRUE)
 
+sep_str = "\t"
 count_file_id <- "1uiwd2XxdicvlaRpUizuKQ9Y4C56Q2yjeKq15KIA87HE"
 lval1 <- sheets_get(ss = count_file_id)
 
@@ -33,6 +37,17 @@ get_metadata_val <- function(lsheet, lname) {
 count_file <- get_metadata_val(metadata_sheet, "count_file")
 outdir <- get_metadata_val(metadata_sheet, "outdir")
 CDS_only <- get_metadata_val(metadata_sheet, "CDS_only")
+sep_tag = get_metadata_val(metadata_sheet, "sep")
+
+sep_str <- "\t"
+if (sep_tag == "tab") {
+    sep_str = "\t"
+} else if (sep_tag == "comma") {
+    sep_str = ","
+} else {
+    err_str <- paste0("Unknown sep: ", sep_tag)
+    stop(err_str)
+}
 
 # Now get information from samples_sheet
 
@@ -107,12 +122,17 @@ for (j in 1:samples_sheet_nrow) {
 # Now load information from groups_sheet
 # We shall have two maps here; for non_ref and for ref
 
-ref_map <- list()
-no_ref_map <- list()
 
 
 groups_sheet_nrow <- dim(groups_sheet)[1]
 groups_sheet_ncol <- dim(groups_sheet)[2]
+
+
+get_cond_samples <- function(lcond) {
+    lfactor <- factor_map[[lcond]]
+    lsamples <- sample_map[[lfactor]]
+    return (lsamples)
+}
 
 
 # At this moment the assumption is that:
@@ -120,33 +140,153 @@ groups_sheet_ncol <- dim(groups_sheet)[2]
 #    connected with AND; if in the future there are other kinds of predicates
 #    we shall see.
 
-get_group_samples <- function() {
+get_group_samples <- function(lgroup_name) {
 
+    # This would get all the predicates under AND clause and shall do an
+    # intersection over the samples
 
+    if (!grepl("AND", lgroup_name, ignore.case = TRUE)) {
 
+        # Remove leading and trailing whitespace, if any
+        lgroup_arr <- gsub("^\\s*|\\s*$", "", lgroup_name)
+
+    } else {
+
+        # Otherwise the format is AND (a1, b1, c1)
+        # 1. get rid of AND
+        # 2. get rid of ()
+        # 3. remove leading and training space if any
+        # 4. split with respect to space and comma (,)
+
+        lval2 <- sub("AND", "", lgroup_name, ignore.case = TRUE)
+        lval3 <- gsub("\\(|\\)", "", lval2)
+        lval4 <- gsub("^\\s*|\\s*$", "", lval3)
+        lgroup_arr <- strsplit(lval4, split = "\\s*,\\s*")[[1]]
+        
+    }   
+
+    lgroup_paste <- paste(lgroup_arr, collapse = ", ")
+    #print(paste0(lgroup_name, " --> ", lgroup_paste))
+
+    sample_lst1 <- lapply(lgroup_arr, get_cond_samples)
+    sample_names <- Reduce(intersect, sample_lst1)
+    return (sample_names)
 }
+
+ref_map <- list()
+non_ref_map <- list()
+group_samples_map <- list()
 
 for (j in 1:groups_sheet_nrow) {
     lrow <- groups_sheet[j, ]
     lgroup_name <- lrow[["@group_name"]]
-    print(lgroup_name)
+    #print(lgroup_name)
 
     lnon_ref_str <- lrow[["@non_ref"]]
-    lnon_ref_samples <- get_group_samples(lnon_ref_str)\
+    lnon_ref_samples <- get_group_samples(lnon_ref_str)
     non_ref_map[[lgroup_name]] <- lnon_ref_samples
-    print(lnon_ref)
+    #print(lnon_ref)
 
     lref_str <- lrow[["@ref"]]
     lref_samples <- get_group_samples(lref_str)
     ref_map[[lgroup_name]] <- lref_samples
 
-    print(lref)
-    print("....")
+
+    condVec <- c(rep("ref", length(lref_samples)), 
+        rep("non_ref", length(lnon_ref_samples)))
+    colData <- data.frame(condVec)
+    colnames(colData) <- c(lgroup_name)
+    all_samples <- c(lref_samples, lnon_ref_samples)
+    rownames(colData) <- all_samples
+
+    group_samples_map[[lgroup_name]] <- colData
+}
+
+# Now process the tests_sheet
+
+getColData <- function(ltest_desc) {
+
+    # 1. Assumping it's a single factor test get the group_name
+    lgroup_name <- sub("~\\s*(\\S+)\\s*", "\\1", ltest_desc)
+    lsample_df <- group_samples_map[[lgroup_name]]
+    return (lsample_df)
+}
+
+getCountData <- function(count_tab, colData, CDS_only) {
+    lsamples <- rownames(colData)
+    ldata <- count_tab[, lsamples]
+    ldata_final <- NA
+    if (CDS_only) {
+        lrows1 <- rownames(ldata)
+        lrows_CDS <- grep("^CDS", lrows1, value = TRUE)
+        ldata_final <- ldata[lrows_CDS, ]
+    } else {
+        ldata_final <- ldata
+    }
+    return (ldata_final)
 }
 
 
+tests_sheet_nrow <- dim(tests_sheet)[1]
+tests_sheet_ncol <- dim(tests_sheet)[2]
+
+count_tab <- read.csv(count_file, sep = sep_str, header = TRUE, row.names = 1,
+    stringsAsFactors = FALSE, check.names = FALSE)
+
+for (j in 1:tests_sheet_nrow) {
+
+    lrow <- tests_sheet[j, ]
+    ltest_name <- lrow[["@test_name"]]
+    ltest_desc <- lrow[["@test_desc"]]
 
 
+    loutdir <- paste0(outdir, "/", ltest_name)
+    lprefix <- ltest_name
+
+    dir.create(file.path(loutdir), recursive = TRUE)
+    logfile <- paste0(loutdir, "/", lprefix, "_logfile.txt")
+    #print(logfile)
+
+    file.create(logfile)
+    sink(logfile)
+
+    print(ltest_name)
+    print(ltest_desc)
+    print("........")
+
+    # Build the test
+    colData <- getColData(ltest_desc)
+    lcount_tab <- getCountData(count_tab, colData, CDS_only)
+
+    print(colData)
+    design_col <- colnames(colData)
+    colnames(colData) <- "condition"
+    # 
+    dds <- DESeqDataSetFromMatrix(countData = lcount_tab,
+        colData = colData,
+        design = ~ condition)
+
+
+    dds$condition <- relevel(dds$condition, ref="ref")
+    dds <- DESeq(dds)
+    res <- results(dds)
+    resOrdered <- res[order(res$padj),]
+    resOrdered2 = setDT(data.frame(resOrdered), keep.rownames = TRUE)[]
+    colnames(resOrdered2)[1] <- "Gene_id"
+
+    # Write DESeq2 results and MA plots
+    outfile = paste0(loutdir, "/", lprefix, ".tsv")
+    write.table(resOrdered2, outfile, sep = "\t", row.names = FALSE)
+
+    ma_pdf_file = paste0(loutdir, "/", lprefix, "_MA.pdf")
+    pdf(ma_pdf_file)
+    plotMA(res, ylim=c(-10,10), main = lprefix)
+    dev.off()
+
+    print("")
+    sink()
+   
+}
 
 
 
