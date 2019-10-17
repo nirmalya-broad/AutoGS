@@ -236,55 +236,69 @@ count_tab <- read.csv(count_file, sep = sep_str, header = TRUE, row.names = 1,
 for (j in 1:tests_sheet_nrow) {
 
     lrow <- tests_sheet[j, ]
+    ldo_test1 <- lrow[["@do_test"]]
     ltest_name <- lrow[["@test_name"]]
     ltest_desc <- lrow[["@test_desc"]]
 
+    ldo_test <-  NA
+    if (is.na(ldo_test1)) {
+        ldo_test <- ""
+    } else {
+        ldo_test <- ldo_test1
+    }
 
-    loutdir <- paste0(outdir, "/", ltest_name)
-    lprefix <- ltest_name
+    print("outside the loop")
+    if ('no' == tolower(ldo_test)) {
+    } else {
+    
+        print("inside the loop")
+    
+        loutdir <- paste0(outdir, "/", ltest_name)
+        lprefix <- ltest_name
 
-    dir.create(file.path(loutdir), recursive = TRUE)
-    logfile <- paste0(loutdir, "/", lprefix, "_logfile.txt")
-    #print(logfile)
+        dir.create(file.path(loutdir), recursive = TRUE)
+        logfile <- paste0(loutdir, "/", lprefix, "_logfile.txt")
+        #print(logfile)
 
-    file.create(logfile)
-    sink(logfile)
+        file.create(logfile)
+        sink(logfile)
 
-    print(ltest_name)
-    print(ltest_desc)
-    print("........")
+        print(ltest_name)
+        print(ltest_desc)
+        print("........")
 
-    # Build the test
-    colData <- getColData(ltest_desc)
-    lcount_tab <- getCountData(count_tab, colData, CDS_only)
+        # Build the test
+        colData <- getColData(ltest_desc)
+        lcount_tab <- getCountData(count_tab, colData, CDS_only)
 
-    print(colData)
-    design_col <- colnames(colData)
-    colnames(colData) <- "condition"
-    # 
-    dds <- DESeqDataSetFromMatrix(countData = lcount_tab,
-        colData = colData,
-        design = ~ condition)
+        print(colData)
+        design_col <- colnames(colData)
+        colnames(colData) <- "condition"
+        # 
+        dds <- DESeqDataSetFromMatrix(countData = lcount_tab,
+            colData = colData,
+            design = ~ condition)
 
 
-    dds$condition <- relevel(dds$condition, ref="ref")
-    dds <- DESeq(dds)
-    res <- results(dds)
-    resOrdered <- res[order(res$padj),]
-    resOrdered2 = setDT(data.frame(resOrdered), keep.rownames = TRUE)[]
-    colnames(resOrdered2)[1] <- "Gene_id"
+        dds$condition <- relevel(dds$condition, ref="ref")
+        dds <- DESeq(dds)
+        res <- results(dds)
+        resOrdered <- res[order(res$padj),]
+        resOrdered2 = setDT(data.frame(resOrdered), keep.rownames = TRUE)[]
+        colnames(resOrdered2)[1] <- "Gene_id"
 
-    # Write DESeq2 results and MA plots
-    outfile = paste0(loutdir, "/", lprefix, ".tsv")
-    write.table(resOrdered2, outfile, sep = "\t", row.names = FALSE)
+        # Write DESeq2 results and MA plots
+        outfile = paste0(loutdir, "/", lprefix, ".tsv")
+        write.table(resOrdered2, outfile, sep = "\t", row.names = FALSE)
 
-    ma_pdf_file = paste0(loutdir, "/", lprefix, "_MA.pdf")
-    pdf(ma_pdf_file)
-    plotMA(res, ylim=c(-10,10), main = lprefix)
-    dev.off()
+        ma_pdf_file = paste0(loutdir, "/", lprefix, "_MA.pdf")
+        pdf(ma_pdf_file)
+        plotMA(res, ylim=c(-10,10), main = lprefix)
+        dev.off()
 
-    print("")
-    sink()
+        print("")
+        sink()
+    }
    
 }
 
