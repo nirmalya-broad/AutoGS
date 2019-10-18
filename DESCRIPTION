@@ -8,14 +8,14 @@ Authors@R:
            email = "nirmalya@broadinstitute.org",
            comment = c(ORCID = "YOUR-ORCID-ID"))
 Description: Generate probes for PatH-Cap.
-Depends: R (>= 3.3.0), 
+Depends: R (>= 3.3.0),
+            tidyverse, 
+            DESeq2,
             googlesheets4, 
-            googledrive,
-            DESeq2,
             data.table
-Imports: googlesheets4,
-            googledrive,
+Imports: tidyverse,
             DESeq2,
+            googlesheets4,
             data.table
 License: What license it uses
 Encoding: UTF-8

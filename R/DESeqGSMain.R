@@ -12,7 +12,7 @@ get_factor_val <- function(factor_str) {
 }
 
 is_factor <- function(lstr) {
-    lval <- grepl('^@factor\\s+', lstr)
+    lval <- grepl('@factor\\s+', lstr)
     return (lval)
 }
 
@@ -123,8 +123,6 @@ DESeqGS <- function(gs_id) {
     tests_sheet <- read_sheet(ss = gs_id, sheet = "tests")
 
     # Get the metadata
-
-
 
     count_file <- get_metadata_val(metadata_sheet, "count_file")
     outdir <- get_metadata_val(metadata_sheet, "outdir")
