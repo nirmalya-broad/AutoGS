@@ -98,7 +98,8 @@ getCountData <- function(count_tab, colData, CDS_only) {
 }
 
 
-exe_samples_sheet <- function(samples_sheet) {
+exe_samples_sheet <- function(samples_sheet, all_sample_names) {
+
     samples_sheet_nrow <- dim(samples_sheet)[1]
     samples_sheet_ncol <- dim(samples_sheet)[2]
     samples_sheet_cols <- colnames(samples_sheet)
@@ -108,13 +109,22 @@ exe_samples_sheet <- function(samples_sheet) {
     factor_map <- list()
     sample_map <- list()
 
+    
+
     for (j in 1:samples_sheet_nrow) {
         lrow <- samples_sheet[j, ]
         sample_name <- get_sample_name(lrow)
 
         col_names <- names(lrow)
 
-        lsample <- lrow[['@sample_name']]
+        lsample_tag <- lrow[['@sample_name']]
+        
+        # Expand it to sample names
+        lsamples <- grep(lsample_tag, all_sample_names, value = TRUE)
+        print("....")
+        print(lsample_tag)
+        print(lsamples)
+        
         for (col_name in col_names) {
             if (is_factor(col_name)) {
                 factor_val <- lrow[[col_name]]
@@ -123,11 +133,14 @@ exe_samples_sheet <- function(samples_sheet) {
                     full_factor_val <- paste0(col_name_tr, '::', factor_val)
                     if (full_factor_val %in% names(sample_map)) {
                         lval1 <- sample_map[[full_factor_val]]
-                        if (!(lsample %in% lval1)) {
-                            sample_map[[full_factor_val]] <- c(lval1, lsample)
+                        if (!any((lsamples %in% lval1))) {
+                            sample_map[[full_factor_val]] <- c(lval1, lsamples)
+                        } else {
+                            err_str <- paste0("Conflicting sample_tag: ", lsample_tag)
+                            stop(err_str)
                         }
                     } else {
-                        sample_map[[full_factor_val]] <- lsample
+                        sample_map[[full_factor_val]] <- lsamples
                     }
                     
                     if (factor_val %in% names(factor_map)) {
@@ -162,7 +175,8 @@ exe_groups_sheet <- function(groups_sheet, factor_map, sample_map) {
         lgroup_name <- lrow[["@group_name"]]
 
         lnon_ref_str <- lrow[["@non_ref"]]
-        lnon_ref_samples <- get_group_samples(lnon_ref_str, factor_map, sample_map)
+        lnon_ref_samples <- get_group_samples(lnon_ref_str, factor_map, 
+            sample_map)
 
         lref_str <- lrow[["@ref"]]
         lref_samples <- get_group_samples(lref_str, factor_map, sample_map)
@@ -183,7 +197,8 @@ exe_groups_sheet <- function(groups_sheet, factor_map, sample_map) {
 }
 
 
-exe_single_way_test <- function(ltest_name, ltest_desc, group_samples_map, count_tab, outdir, CDS_only) {
+exe_single_way_test <- function(ltest_name, ltest_desc, group_samples_map, 
+        count_tab, outdir, CDS_only) {
     loutdir <- paste0(outdir, "/", ltest_name)
     lprefix <- ltest_name
 
@@ -230,12 +245,11 @@ exe_single_way_test <- function(ltest_name, ltest_desc, group_samples_map, count
     sink()
 }
 
-exe_tests_sheet <- function (tests_sheet, count_file, group_samples_map, outdir, CDS_only, sep_str) {
+exe_tests_sheet <- function (tests_sheet, count_tab, group_samples_map, outdir,
+         CDS_only, sep_str) {
     tests_sheet_nrow <- dim(tests_sheet)[1]
     tests_sheet_ncol <- dim(tests_sheet)[2]
 
-    count_tab <- read.csv(count_file, sep = sep_str, header = TRUE, row.names = 1,
-        stringsAsFactors = FALSE, check.names = FALSE)
 
     for (j in 1:tests_sheet_nrow) {
 
@@ -254,15 +268,30 @@ exe_tests_sheet <- function (tests_sheet, count_file, group_samples_map, outdir,
         if ('no' == tolower(ldo_test)) {
         } else {
         
-            exe_single_way_test(ltest_name, ltest_desc, group_samples_map, count_tab, outdir, CDS_only)    
+            exe_single_way_test(ltest_name, ltest_desc, group_samples_map, 
+                count_tab, outdir, CDS_only)    
         }
     }
 }
 
 DESeqGS <- function(gs_id) {
 
-    pat_str <- "(https://docs.google.com/spreadsheets/d/)*(\\w+?)(/edit.*)"
-    gs_id_f = sub(pat_str, "\\2", gs_id)
+    start_str <- "https://docs.google.com/spreadsheets/d/"
+    start_str_no_https <- "docs.google.com/spreadsheets/d/"
+    
+    gs_id_f <- NA
+    if (startsWith(gs_id, start_str)) {
+        # Hope that the entire url is copy pasted 
+        pat_str <- "^https://docs.google.com/spreadsheets/d/(\\w+?)/edit.*$"
+        gs_id_f = sub(pat_str, "\\1", gs_id)
+    } else if (startsWith(gs_id, start_str_no_https)) {
+        pat_str <- "^docs.google.com/spreadsheets/d/(\\w+?)/edit.*$"
+        gs_id_f <- sub(pat_str, "\\1", gs_id)
+    }else {
+        # Hope that the entire gs_id is the actual googledoc id
+        gs_id_f <- gs_id
+    }
+
     lval1 <- sheets_get(ss = gs_id_f)
 
     # There should be four tabs: metadata, samples, groups, tests
@@ -291,9 +320,13 @@ DESeqGS <- function(gs_id) {
         stop(err_str)
     }
 
+    count_tab <- read.csv(count_file, sep = sep_str, header = TRUE, 
+        row.names = 1, stringsAsFactors = FALSE, check.names = FALSE)
+    all_sample_names <- colnames(count_tab)
+
     # 1. Get information from samples_sheet
 
-    ret_val1 <- exe_samples_sheet(samples_sheet)
+    ret_val1 <- exe_samples_sheet(samples_sheet, all_sample_names)
     factor_map <- ret_val1$factor_map
     sample_map <- ret_val1$sample_map
 
@@ -305,7 +338,8 @@ DESeqGS <- function(gs_id) {
 
     # 3. Process the tests_sheet
     
-    exe_tests_sheet(tests_sheet, count_file, group_samples_map, outdir, CDS_only, sep_str)
+    exe_tests_sheet(tests_sheet, count_tab, group_samples_map, outdir, 
+        CDS_only, sep_str)
 
 }
 
