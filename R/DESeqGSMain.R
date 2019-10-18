@@ -109,18 +109,20 @@ getCountData <- function(count_tab, colData, CDS_only) {
 #sheets_auth(email = TRUE)
 
 DESeqGS <- function(gs_id) {
-    sep_str = "\t"
-    #gs_id <- "1uiwd2XxdicvlaRpUizuKQ9Y4C56Q2yjeKq15KIA87HE"
-    lval1 <- sheets_get(ss = gs_id)
+
+
+    pat_str <- "(https://docs.google.com/spreadsheets/d/)*(\\w+?)(/edit.*)"
+    gs_id_f = sub(pat_str, "\\2", gs_id)
+    lval1 <- sheets_get(ss = gs_id_f)
 
     # There should be four tabs: metadata, samples, groups, tests
 
     lsheets1 <- lval1$sheets
 
-    metadata_sheet <- read_sheet(ss = gs_id, sheet = "metadata")
-    samples_sheet <- read_sheet(ss = gs_id, sheet = "samples")
-    groups_sheet <- read_sheet(ss = gs_id, sheet = "groups")
-    tests_sheet <- read_sheet(ss = gs_id, sheet = "tests")
+    metadata_sheet <- read_sheet(ss = gs_id_f, sheet = "metadata")
+    samples_sheet <- read_sheet(ss = gs_id_f, sheet = "samples")
+    groups_sheet <- read_sheet(ss = gs_id_f, sheet = "groups")
+    tests_sheet <- read_sheet(ss = gs_id_f, sheet = "tests")
 
     # Get the metadata
 
@@ -129,7 +131,7 @@ DESeqGS <- function(gs_id) {
     CDS_only <- get_metadata_val(metadata_sheet, "CDS_only")
     sep_tag = get_metadata_val(metadata_sheet, "sep")
 
-    sep_str <- "\t"
+    sep_str <- NA
     if (sep_tag == "tab") {
         sep_str = "\t"
     } else if (sep_tag == "comma") {
