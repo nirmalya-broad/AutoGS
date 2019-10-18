@@ -1,4 +1,4 @@
-Package: DESeqGS
+Package: AutoGS
 Title: Automate DESeq2 using google sheet 
 Version: 1.0
 Authors@R: 
