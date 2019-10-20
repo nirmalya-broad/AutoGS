@@ -234,7 +234,7 @@ exe_single_way_test <- function(ltest_name, ltest_desc, group_samples_map,
 
     # Write DESeq2 results and MA plots
     outfile = paste0(loutdir, "/", lprefix, ".tsv")
-    write.table(resOrdered2, outfile, sep = "\t", row.names = FALSE)
+    write.table(resOrdered2, outfile, sep = "\t", row.names = FALSE, quote = FALSE)
 
     ma_pdf_file = paste0(loutdir, "/", lprefix, "_MA.pdf")
     pdf(ma_pdf_file)
