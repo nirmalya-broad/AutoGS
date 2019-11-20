@@ -98,6 +98,31 @@ getCountData <- function(count_tab, colData, CDS_only) {
 }
 
 
+exe_map_factors <- function(samples_sheet) {
+    samples_sheet_nrow <- dim(samples_sheet)[1]
+    samples_sheet_ncol <- dim(samples_sheet)[2]
+    samples_sheet_cols <- colnames(samples_sheet)
+
+    factor_sets <- grep('@factor', samples_sheet_cols, value = TRUE)
+
+    map_factors <- list()
+
+    lsample_name <- samples_sheet[, "@sample_name"]
+
+    for (lfactor_name in factor_sets) {
+        lfactor1 <- (samples_sheet[, lfactor_name])[[1]]
+
+        names(lfactor1) <- lsample_name[[1]]
+        lfactor <- addNA(lfactor1)
+        map_factors[[lfactor_name]] <- lfactor
+        
+    }
+
+    return (map_factors)
+
+}
+
+
 exe_samples_sheet <- function(samples_sheet, all_sample_names) {
 
     samples_sheet_nrow <- dim(samples_sheet)[1]
@@ -108,8 +133,6 @@ exe_samples_sheet <- function(samples_sheet, all_sample_names) {
 
     factor_map <- list()
     sample_map <- list()
-
-    
 
     for (j in 1:samples_sheet_nrow) {
         lrow <- samples_sheet[j, ]
