@@ -7,7 +7,12 @@ append_factor <- function(pca_df, aes_type_str, aes_sheet, map_factors) {
     if (row_count) {
         lfactor_name <- lrow1["@factor_name"][[1]]
         lfactor <- map_factors[[lfactor_name]]
-        pca_df[, aes_type_str] <- lfactor
+        
+        if (aes_type_str == "size") {
+            pca_df[, aes_type_str] <- as.numeric(as.character(lfactor))
+        } else {
+            pca_df[, aes_type_str] <- lfactor
+        }
     }
 
     return (pca_df)
@@ -43,7 +48,19 @@ append_color_map <- function(lplt1, aes_types, aes_sheet) {
             # get the name of the palette
             palette_val <- lrow1$`@aes_assign_value`
 
+            # Check number of colors in the palette
+            lmaxcolors <- brewer.pal.info["Paired", "maxcolors"]
+            num_levels <- length(levels(lplt1$data$color))
+
+            if (num_levels > lmaxcolors) {
+                err_msg <- paste0("Number of levels ", num_levels,  
+                    " in color factor is more than maxcolors ", lmaxcolors, 
+                    " in palette ", palette_val)
+                stop(err_msg)
+            }
+
             lplt2 <- lplt1 + scale_colour_brewer(palette = palette_val) 
+            print("Adding scale_colour_brewer.")
             
         } else {
             err_str <- paste0("aes color format not supported")
@@ -58,6 +75,9 @@ append_color_map <- function(lplt1, aes_types, aes_sheet) {
     return (lplt2)
 }
 
+# https://stackoverflow.com/a/83162
+last_val <- function(x) { tail(x, n = 1) }
+
 append_shape_map <- function(lplt1, aes_types, aes_sheet) {
 
     lplt2 <- NA
@@ -69,12 +89,28 @@ append_shape_map <- function(lplt1, aes_types, aes_sheet) {
             # get the name of the palette
             shape_val1 <- lrow1$`@aes_assign_value`
             shape_val2 <- trim(shape_val1)
-            shape_vals <- strsplit(shape_val2, split = "\\s*,\\s*", perl = TRUE) 
+            shape_vals1 <- strsplit(shape_val2, split = "\\s*,\\s*", perl = TRUE)
 
-            lplt2 <- lplt1 + scale_shape_manual(values = shape_vals) 
+            # This is the number of levels specified by users; 21,22,23,24,25
+            # are preferred.
+
+            shape_vals <- shape_vals1[[1]]
+            spec_shape_len <- length(shape_vals)
+
+            data_shape_levels <- levels(lplt1$data$shape)
+
+            data_shape_len <- length(data_shape_levels)
+            if (data_shape_len > spec_shape_len) {
+                err_str <- paste0("Number of shapes on spreadsheet is less than required.")
+                stop(err_str)
+            }
+
+            lplt2 <- lplt1 + scale_shape_manual(values = as.numeric(shape_vals)) 
+
+            print("Adding scale_shape_manual.")
             
         } else {
-            err_str <- paste0("aes color format not supported")
+            err_str <- paste0("aes shape format not supported.")
             stop(err_str)
         }   
 
@@ -94,15 +130,22 @@ append_size_map <- function(lplt1, aes_types, aes_sheet) {
 
         lrow1 <- aes_sheet[aes_sheet[, "@aes_type"] == "size", ]
 
-        if (lrow1$`@aes_assign_proc` == "list") {
+        if (lrow1$`@aes_assign_proc` == "range") {
             # get the name of the palette
-            shape_val1 <- lrow1$`@aes_assign_value`
-            shape_val2 <- trim(shape_val1)
-            shape_vals <- strsplit(shape_val2, split = "\\s*,\\s*", perl = TRUE) 
-            lplt2 <- lplt1 + scale_shape_manual(values = shape_vals)
+            size_val1 <- lrow1$`@aes_assign_value`
+            size_val2 <- trim(size_val1)
+            size_vals1 <- strsplit(size_val2, split = "\\s*,\\s*", perl = TRUE) 
+            size_vals <- size_vals1[[1]]
+            #size_val_start <- size_vals[1]
+            #size_val_end <- size_vals[2]
+            #data_size_levels <- levels(lplt1$data$size)
+            #size_level_count <- length(data_size_levels)
+
+            lplt2 <- lplt1 + scale_size_continuous(range = as.numeric(size_vals))
+            print("Adding scale_size.")
             
         } else {
-            err_str <- paste0("aes color format not supported")
+            err_str <- paste0("aes size format not supported.")
             stop(err_str)
         }
 
@@ -118,7 +161,7 @@ append_size_map <- function(lplt1, aes_types, aes_sheet) {
 # From https://stackoverflow.com/a/2261149
 trim <- function (x) gsub("^\\s+|\\s+$", "", x)
 
-DESeqGS <- function(gs_id) {
+vizGS <- function(gs_id) {
 
     start_str <- "https://docs.google.com/spreadsheets/d/"
     start_str_no_https <- "docs.google.com/spreadsheets/d/"
@@ -197,16 +240,21 @@ DESeqGS <- function(gs_id) {
     pca_df3 <- append_factor(pca_df2, "shape", aes_sheet, map_factors)
     pca_df <- append_factor(pca_df3, "size", aes_sheet, map_factors)
 
-
     # 5. Start building ggplot2
 
-    plt1 <- ggplot(pca_df, aes(x = PC1, y = PC2))
+    #plt1 <- ggplot(pca_df, aes(x = PC1, y = PC2, size = size, color = color, shape = shape))
+    #plt1 <- ggplot(pca_df, aes(x = PC1, y = PC2, color = color, shape = shape))
+    #plt1 <- ggplot(pca_df, aes(x = PC1, y = PC2, shape = shape))
+
+    plt1 <- ggplot(pca_df, aes(x = PC1, y = PC2, color = color))
 
     # 6. Add aesthetic mappings
 
-    pl2 <- append_aes_map(plt1, "shape", aes_types, aes_sheet)        
+    plt2 <- append_aes_map(plt1, "shape", aes_types, aes_sheet)        
     plt3 <- append_aes_map(plt2, "size", aes_types, aes_sheet)        
-    plt_f <- append_aes_map(plt3, "color", aes_types, aes_sheet)
+    plt4 <- append_aes_map(plt3, "color", aes_types, aes_sheet)
+
+    plt_f <- plt4 + geom_point()
 
 
 

@@ -12,11 +12,13 @@ Depends: R (>= 3.3.0),
             tidyverse, 
             DESeq2,
             googlesheets4, 
-            data.table
+            data.table,
+            RColorBrewer
 Imports: tidyverse,
             DESeq2,
             googlesheets4,
-            data.table
+            data.table,
+            RColorBrewer
 License: What license it uses
 Encoding: UTF-8
 LazyData: true
