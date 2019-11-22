@@ -220,4 +220,31 @@ exe_groups_sheet <- function(groups_sheet, factor_map, sample_map) {
 }
 
 
+get_normalized_data <- function(infile, sep_str, CDS_only, do_vst) {
+    ltab1 <- read.table(infile, sep = sep_str, header = TRUE, row.names = 1, stringsAsFactors = FALSE, check.names = FALSE)
+    # Get the genes with CDS only and ignore the other tags.
+    rnames1 <- rownames(ltab1)
+    ltab2 <- NA
+    if (CDS_only) {
+        rnames <- rnames1[grep("^CDS", rnames1)]
+        ltab2 <- ltab1[rnames, ]
+    } else {
+        ltab2 <- ltab1
+    }
+
+    ltab3 <- ltab2
+    ltab3[is.na(ltab2)] <- 0
+    ltab4 <- as.matrix(ltab3)
+    rownames(ltab4) <- rownames(ltab3)
+    colnames(ltab4) <- colnames(ltab3)
+
+    ltab4_vt <- NA
+    if (do_vst) {
+        ltab4_vt <- vst(ltab4, blind = FALSE)
+    } else {
+        ltab4_vt <- ltab4
+    }
+
+    return (ltab4_vt)
+}
 

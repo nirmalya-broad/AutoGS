@@ -75,7 +75,7 @@ exe_tests_sheet <- function (tests_sheet, count_tab, group_samples_map, outdir,
     }
 }
 
-DESeqGS <- function(gs_id) {
+DESeq_GS <- function(gs_id) {
 
     start_str <- "https://docs.google.com/spreadsheets/d/"
     start_str_no_https <- "docs.google.com/spreadsheets/d/"
